@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>生動俗語拼拼樂</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'vivid-slang-scramble';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        
+        window.firebaseApp = initializeApp(firebaseConfig);
+        window.db = getFirestore(window.firebaseApp);
+        window.auth = getAuth(window.firebaseApp);
+        window.appId = appId;
+
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(window.auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(window.auth);
+                }
+                console.log("Firebase Auth Ready for Scramble Game");
+            } catch (error) {
+                console.error("Auth error:", error);
+            }
+        };
+        initAuth();
+    </script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans HK', sans-serif;
+            background-color: #fde047; /* Yellow Pop Art Base */
+            color: #000;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+
+        /* Halftone dot pattern background */
+        .bg-halftone {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: radial-gradient(#000 2px, transparent 2px);
+            background-size: 16px 16px;
+            opacity: 0.1;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Pop Art Container */
+        .pop-container {
+            border: 5px solid #000;
+            background-color: #fff;
+            box-shadow: 10px 10px 0px #000;
+            border-radius: 12px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Pop Art Buttons */
+        .pop-btn {
+            border: 4px solid #000;
+            box-shadow: 5px 5px 0px #000;
+            transition: all 0.1s;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+        .pop-btn:active {
+            transform: translate(5px, 5px);
+            box-shadow: 0px 0px 0px #000;
+        }
+
+        .pop-btn-pink { background-color: #ec4899; color: #fff; }
+        .pop-btn-blue { background-color: #0ea5e9; color: #fff; }
+        .pop-btn-green { background-color: #22c55e; color: #fff; }
+
+        /* Draggable / Clickable Character Blocks */
+        .char-block {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 900;
+            border: 3px solid #000;
+            background-color: #fff;
+            box-shadow: 3px 3px 0px #000;
+            cursor: pointer;
+            transition: all 0.1s;
+            border-radius: 8px;
+            user-select: none;
+        }
+        .char-block:active {
+            transform: translate(3px, 3px);
+            box-shadow: 0px 0px 0px #000;
+        }
+        .char-block.selected {
+            background-color: #fca5a5;
+            color: #000;
+        }
+        .char-block.empty-slot {
+            background-color: #f1f5f9;
+            border: 3px dashed #94a3b8;
+            box-shadow: none;
+            color: transparent;
+        }
+
+        /* Comic Speech Bubble */
+        .speech-bubble {
+            position: relative;
+            background: #fff;
+            border: 4px solid #000;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 6px 6px 0px #000;
+        }
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -20px;
+            left: 30px;
+            border-width: 20px 20px 0 0;
+            border-style: solid;
+            border-color: #000 transparent transparent transparent;
+        }
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            bottom: -13px;
+            left: 33px;
+            border-width: 14px 14px 0 0;
+            border-style: solid;
+            border-color: #fff transparent transparent transparent;
+            z-index: 1;
+        }
+
+        .hidden-screen { display: none !important; }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-3deg); }
+            75% { transform: translateX(5px) rotate(3deg); }
+        }
+        .shake { animation: shake 0.3s ease-in-out; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 relative">
+    <div class="bg-halftone"></div>
+
+    <div class="max-w-md w-full pop-container relative flex flex-col h-[750px] max-h-[90vh] overflow-hidden">
+        
+        <!-- Start Screen -->
+        <div id="screen-start" class="p-8 flex flex-col items-center justify-center h-full text-center bg-cyan-100">
+            <div class="text-7xl mb-6 font-black drop-shadow-[4px_4px_0_#000]">💥</div>
+            <div class="bg-yellow-400 border-4 border-black px-6 py-2 rounded-xl mb-4 transform -rotate-3 box-shadow-solid">
+                <h1 class="text-4xl font-black text-black tracking-widest">生動俗語</h1>
+            </div>
+            <h2 class="text-5xl font-black mb-8 text-pink-500" style="text-shadow: 3px 3px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;">拼拼樂</h2>
+            
+            <p class="text-sm font-bold mb-8 bg-white border-4 border-black p-4 rounded-xl shadow-[4px_4px_0_#000]">
+                玩法：根據情境，將打亂的字塊順序拼成正確的廣東俗語！<br>有精選女聲教你讀正音！
+            </p>
+            <button onclick="startGame()" class="w-full pop-btn pop-btn-pink py-4 px-8 text-2xl rounded-xl mb-4">
+                開始挑戰
+            </button>
+            <button onclick="showLeaderboard()" class="w-full pop-btn pop-btn-green text-black py-3 px-8 text-lg rounded-xl">
+                🏆 睇龍虎榜
+            </button>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="screen-game" class="hidden-screen p-5 flex flex-col h-full bg-pink-100 relative">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-4 bg-white p-3 rounded-xl border-4 border-black shadow-[4px_4px_0px_#000]">
+                <div class="font-black text-lg">
+                    關卡 <span id="ui-question-count" class="text-pink-600">1/10</span>
+                </div>
+                <div class="font-black text-xl text-blue-600">
+                    分數 <span id="ui-score">0</span>
+                </div>
+            </div>
+
+            <!-- Timer Bar -->
+            <div class="w-full h-4 bg-white border-2 border-black rounded-full mb-6 overflow-hidden">
+                <div id="timer-bar" class="h-full bg-green-500 w-full transition-all duration-[50ms] linear"></div>
+            </div>
+
+            <!-- Scenario -->
+            <div class="speech-bubble mb-8 mt-2">
+                <span class="absolute -top-4 -left-2 bg-yellow-400 text-black border-2 border-black px-2 py-0.5 font-black text-xs transform -rotate-6">情境題</span>
+                <p id="ui-scenario" class="text-[16px] font-bold leading-relaxed"></p>
+            </div>
+
+            <div class="flex flex-col items-center flex-grow">
+                <div class="text-sm font-black text-gray-500 mb-2">請按順序點擊字塊組合：</div>
+                
+                <!-- Target Slots -->
+                <div id="ui-slots" class="flex gap-2 flex-wrap justify-center mb-8 min-h-[50px]">
+                    <!-- Slots injected here -->
+                </div>
+
+                <div class="w-full border-t-4 border-dashed border-black opacity-20 mb-8"></div>
+
+                <!-- Available Characters -->
+                <div id="ui-chars" class="flex gap-3 flex-wrap justify-center">
+                    <!-- Char blocks injected here -->
+                </div>
+            </div>
+            
+            <!-- Jyutping Hint -->
+            <div class="text-center mt-auto pb-2">
+                <div class="inline-block bg-white border-2 border-black rounded-lg px-4 py-2 shadow-[3px_3px_0_#000]">
+                    <span class="text-xs font-bold text-gray-500 block mb-1">粵拼提示：</span>
+                    <span id="ui-jyutping" class="font-black text-blue-600 tracking-wider"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feedback Modal -->
+        <div id="modal-feedback" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-6 hidden-screen z-40 backdrop-blur-sm">
+            <div class="bg-white border-4 border-black p-6 rounded-2xl w-full shadow-[8px_8px_0_#fff] text-center transform rotate-1">
+                <div id="feedback-icon" class="text-7xl mb-2 drop-shadow-md">🎉</div>
+                <h3 id="feedback-title" class="text-4xl font-black mb-4 uppercase">好嘢！</h3>
+                
+                <div class="text-3xl font-black text-pink-600 mb-4 bg-yellow-200 border-2 border-black py-2 rounded-lg" id="feedback-word"></div>
+                
+                <div class="text-left bg-cyan-100 border-2 border-black p-4 rounded-xl mb-6 relative">
+                    <span class="absolute -top-3 left-4 bg-black text-white px-2 py-0.5 font-bold text-xs rounded">防坑解說</span>
+                    <p id="feedback-tip" class="text-sm font-bold leading-relaxed"></p>
+                </div>
+
+                <div class="flex gap-2 justify-center mb-6">
+                    <span class="font-black">時間加成:</span>
+                    <span class="text-green-600 font-black" id="feedback-bonus">+0</span>
+                </div>
+
+                <button onclick="playCurrentAudio()" class="w-full pop-btn pop-btn-blue font-black py-3 px-4 rounded-xl mb-3 flex items-center justify-center gap-2">
+                    🔊 聽女聲標準發音
+                </button>
+                <button onclick="nextQuestion()" class="w-full pop-btn pop-btn-green font-black py-4 px-8 text-xl rounded-xl">
+                    下一題 ➔
+                </button>
+            </div>
+        </div>
+
+        <!-- End Screen -->
+        <div id="screen-end" class="hidden-screen p-6 flex flex-col items-center justify-center h-full text-center bg-yellow-300 relative z-10">
+            <div class="text-7xl mb-4">🏆</div>
+            <div class="bg-white border-4 border-black px-6 py-2 rounded-xl mb-6 transform -rotate-2 shadow-[6px_6px_0_#000]">
+                <h1 class="text-4xl font-black text-black">挑戰完成</h1>
+            </div>
+            
+            <div class="bg-white p-6 rounded-2xl border-4 border-black w-full mb-8 shadow-[8px_8px_0_#ec4899]">
+                <div class="text-sm font-black text-gray-500 mb-2 uppercase">最終得分</div>
+                <div class="text-6xl font-black text-pink-600 mb-2"><span id="ui-final-score">0</span></div>
+            </div>
+
+            <div id="save-score-section" class="w-full bg-white p-5 rounded-xl border-4 border-black mb-6 shadow-[6px_6px_0_#0ea5e9]">
+                <p class="font-black mb-3">留下大名，登入龍虎榜！</p>
+                <div class="flex gap-2">
+                    <input type="text" id="player-name" placeholder="輸入花名..." class="flex-grow bg-gray-100 border-4 border-black rounded-lg px-3 py-2 font-black outline-none focus:bg-white">
+                    <button id="btn-save-score" onclick="saveScore()" class="pop-btn pop-btn-blue font-black py-2 px-4 rounded-lg whitespace-nowrap">
+                        提交
+                    </button>
+                </div>
+                <p id="save-status" class="text-sm text-green-600 font-black mt-3 hidden">✅ 成功上榜！</p>
+            </div>
+
+            <div class="flex w-full gap-3">
+                <button onclick="showStartScreen()" class="flex-1 pop-btn bg-white text-black font-black py-3 px-2 rounded-xl text-sm">
+                    🔄 主選單
+                </button>
+                <button onclick="showLeaderboard()" class="flex-1 pop-btn pop-btn-green font-black py-3 px-2 text-sm rounded-xl">
+                    🏆 龍虎榜
+                </button>
+            </div>
+        </div>
+
+        <!-- Leaderboard Screen -->
+        <div id="screen-leaderboard" class="hidden-screen p-6 flex flex-col h-full bg-cyan-100 relative z-20">
+            <div class="bg-yellow-400 border-4 border-black px-4 py-2 rounded-xl mt-4 mb-6 transform -rotate-1 mx-auto shadow-[6px_6px_0_#000]">
+                <h2 class="text-3xl font-black text-center text-black">🔥 龍虎榜</h2>
+            </div>
+            
+            <div class="flex-grow overflow-y-auto custom-scrollbar bg-white rounded-xl border-4 border-black p-3 shadow-[inset_4px_4px_0_rgba(0,0,0,0.1)]" id="leaderboard-list">
+                <div class="text-center font-black text-gray-400 mt-10">載入中...</div>
+            </div>
+
+            <button onclick="showStartScreen()" class="w-full pop-btn pop-btn-pink font-black py-4 px-8 text-xl mt-6 rounded-xl">
+                返回主選單
+            </button>
+        </div>
+
+    </div>
+
+    <script type="module">
+        /* Game Data with meticulously crafted TTS pronunciations */
+        const gameData = [
+            {
+                word: "一匹布咁長",
+                scenario: "「點解你同阿明會反面㗎？」「唉，呢件事背後牽涉太多人，講起上嚟真係...」",
+                jyutping: "jat1 pat1 bou3 gam3 coeng4",
+                ttsWord: "一匹布咁長",
+                tip: "形容事情牽涉太多、關係複雜，三言兩語講不完，就像展開一整匹布一樣漫長。"
+            },
+            {
+                word: "嗱嗱聲",
+                scenario: "就快遲到喇！教授已經入咗課室準備點名，你仲唔...",
+                jyutping: "naa4 naa2 seng1",
+                ttsWord: "拿乸腥", 
+                tip: "【意思：趕快、趕緊】廣東話常用疊字加『聲』表示迅速。第二個『嗱』字變調讀第二聲 (naa2)，『聲』口語常讀 seng1。這裡用語音替身強逼讀正音！"
+            },
+            {
+                word: "扮晒嘢",
+                scenario: "個同學平時成日話自己冇溫書、唔識做，結果Mid-term考出嚟全班第一，真係...",
+                jyutping: "baan6 saai3 je5",
+                ttsWord: "扮曬嘢",
+                tip: "【意思：裝模作樣】『扮嘢』等同普通話的『裝蒜』。中間加個『晒』字，生動地強調『極度裝模作樣』。"
+            },
+            {
+                word: "買棺材唔知埞",
+                scenario: "明知呢條小巷咁多賊仔，佢重夠膽死一個人帶住十幾萬現金行入去，真係...",
+                jyutping: "maai5 gun1 coi4 m4 zi1 deng6",
+                ttsWord: "買棺材唔知掟",
+                tip: "『埞』(deng6) 即地方。連去哪買棺材都不知道，形容人不知死活、行事魯莽。注意『埞』字發音為 deng6。"
+            },
+            {
+                word: "七國咁亂",
+                scenario: "入到Hall（宿舍）見到室友個位滿地垃圾，衫褲亂丟，外賣盒堆到山咁高，真係...",
+                jyutping: "cat1 gwok3 gam3 lyun6",
+                ttsWord: "七國咁亂",
+                tip: "【意思：亂七八糟】出自西漢『七國之亂』。『咁』(gam3) 係程度副詞，切勿讀成第2聲。"
+            },
+            {
+                word: "食人隻車",
+                scenario: "搞O-Camp（迎新營），有莊員提議每人收$2000營費，大家嘩然，心諗你係咪想...",
+                jyutping: "sik6 jan4 zek3 geoi1",
+                ttsWord: "食人隻居",
+                tip: "【意思：要求過分/貪得無厭】⚠️ 象棋俗語中的『車』必須讀作 geoi1（居），絕不能讀 ce1！"
+            },
+            {
+                word: "擺明車馬",
+                scenario: "個Groupmate每次開會都特登坐喺靚女隔籬，係人都睇得出佢想點，真係...",
+                jyutping: "baai2 ming4 geoi1 maa5",
+                ttsWord: "擺明居馬",
+                tip: "【意思：意圖明顯】擺出戰陣，形容毫不掩飾。同樣是象棋俗語，『車』讀 geoi1。"
+            },
+            {
+                word: "水蛇春咁長",
+                scenario: "教授Send咗封Email嚟解釋Mid-term範圍，足足寫咗三千字，碌極都碌唔完，真係...",
+                jyutping: "seoi2 se4 ceon1 gam3 coeng4",
+                ttsWord: "水蛇春咁長",
+                tip: "【意思：冗長】『春』(ceon1) 喺廣東話可指卵，水蛇卵連成一條好長。"
+            },
+            {
+                word: "搞出個大頭佛",
+                scenario: "做FYP（畢業論文）嗰陣，唔小心Delete咗全組人做咗成個月嘅Data，今次真係...",
+                jyutping: "gaau2 ceot1 go3 daai6 tau4 fat6",
+                ttsWord: "搞出個大頭佛",
+                tip: "【意思：闖大禍】大頭佛源於舞獅。注意『佛』係入聲字 (fat6)，收音要急促。"
+            },
+            {
+                word: "十劃未有一撇",
+                scenario: "阿媽打電話嚟問你搵到工未，你答：『履歷表都未寫好，真係...』",
+                jyutping: "sap6 waak6 mei6 jau5 jat1 pit3",
+                ttsWord: "十劃未有一撇",
+                tip: "【意思：事情剛開始，毫無頭緒】注意『撇』(pit3) 係入聲，跟普通話發音和聲調完全不同。"
+            }
+        ];
+
+        /* Game State */
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let shuffledQuestions = [];
+        let currentWordChars = [];
+        let selectedSlots = [];
+        const BASE_SCORE = 100;
+        
+        let timerInterval;
+        let timeLeft = 100; 
+        const TIME_LIMIT_MS = 20000; // 20s per question
+        const TICK_RATE = 50;
+        let isAnimating = false; // 新增：鎖定動畫狀態，防止亂點
+
+        /* Voice Initialization */
+        let hkVoices = [];
+        function initVoices() {
+            const voices = window.speechSynthesis.getVoices();
+            hkVoices = voices.filter(v => v.lang === 'zh-HK' || v.lang === 'yue-Hant-HK' || v.lang.includes('HK'));
+        }
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = initVoices;
+            initVoices();
+        }
+
+        window.speakCantonese = function(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'zh-HK';
+                utterance.rate = 0.85; 
+                if (hkVoices.length > 0) {
+                    const femaleVoice = hkVoices.find(v => 
+                        v.name.includes('Sin-ji') || v.name.includes('HiuMaan') || 
+                        v.name.includes('Google') || v.name.includes('Mei-Jia')
+                    );
+                    utterance.voice = femaleVoice || hkVoices[0];
+                }
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        window.playCurrentAudio = function() {
+            const q = shuffledQuestions[currentQuestionIndex];
+            speakCantonese(q.ttsWord || q.word);
+        }
+
+        /* Utility Functions */
+        function $(id) { return document.getElementById(id); }
+        function shuffleArray(array) {
+            return array.map(value => ({ value, sort: Math.random() }))
+                        .sort((a, b) => a.sort - b.sort)
+                        .map(({ value }) => value);
+        }
+
+        function showScreen(screenId) {
+            ['screen-start', 'screen-game', 'modal-feedback', 'screen-end', 'screen-leaderboard'].forEach(id => {
+                $(id).classList.add('hidden-screen');
+            });
+            $(screenId).classList.remove('hidden-screen');
+        }
+
+        window.showStartScreen = () => showScreen('screen-start');
+
+        window.startGame = function() {
+            currentQuestionIndex = 0;
+            score = 0;
+            $('ui-score').innerText = score;
+            shuffledQuestions = shuffleArray([...gameData]); 
+            showScreen('screen-game');
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            const q = shuffledQuestions[currentQuestionIndex];
+            $('ui-question-count').innerText = `${currentQuestionIndex + 1} / ${shuffledQuestions.length}`;
+            $('ui-scenario').innerText = q.scenario;
+            $('ui-jyutping').innerText = q.jyutping;
+
+            // Setup scramble mechanics
+            currentWordChars = q.word.split('');
+            selectedSlots = new Array(currentWordChars.length).fill(null);
+            
+            // Generate shuffled available chars, ensure it's actually shuffled differently
+            let shuffledChars = shuffleArray(currentWordChars.map((char, index) => ({ char, id: index })));
+            
+            renderSlots();
+            renderAvailableChars(shuffledChars);
+            startTimer();
+        }
+
+        function renderSlots() {
+            const slotsContainer = $('ui-slots');
+            slotsContainer.innerHTML = '';
+            selectedSlots.forEach((item, index) => {
+                const el = document.createElement('div');
+                el.className = item ? 'char-block pop-btn-pink' : 'char-block empty-slot';
+                el.innerText = item ? item.char : '_';
+                if(item) {
+                    el.onclick = () => returnChar(index);
+                }
+                slotsContainer.appendChild(el);
+            });
+        }
+
+        let currentShuffledState = [];
+        
+        function renderAvailableChars(chars) {
+            currentShuffledState = chars; // 儲存當前洗牌狀態
+            const charsContainer = $('ui-chars');
+            charsContainer.innerHTML = '';
+            chars.forEach(item => {
+                const el = document.createElement('div');
+                const isSelected = selectedSlots.some(slot => slot && slot.id === item.id);
+                el.className = 'char-block bg-white text-black';
+                if (isSelected) {
+                    el.style.opacity = '0';
+                    el.style.pointerEvents = 'none';
+                }
+                el.innerText = item.char;
+                el.onclick = () => {
+                    if (isAnimating) return; // 如果正在播放錯誤動畫，禁止點擊
+                    const emptyIndex = selectedSlots.findIndex(slot => slot === null);
+                    if (emptyIndex !== -1) {
+                        selectedSlots[emptyIndex] = item;
+                        renderSlots();
+                        renderAvailableChars(currentShuffledState);
+                        checkWin();
+                    }
+                };
+                charsContainer.appendChild(el);
+            });
+        }
+
+        function returnChar(slotIndex) {
+            if (isAnimating) return; // 如果正在播放錯誤動畫，禁止點擊
+            selectedSlots[slotIndex] = null;
+            renderSlots();
+            renderAvailableChars(currentShuffledState);
+        }
+
+        // 新增功能：支援實體鍵盤直接打字輸入
+        document.addEventListener('keydown', (e) => {
+            if (isAnimating) return; // 動畫期間鎖定
+            // 確保只在遊戲畫面中才監聽鍵盤
+            if (!$('screen-game').classList.contains('hidden-screen')) {
+                const key = e.key;
+                // 找出該按鍵是否在目前的可用字塊中，且還沒被選取
+                const availableChar = currentShuffledState.find(item =>
+                    item.char === key && !selectedSlots.some(slot => slot && slot.id === item.id)
+                );
+                
+                if (availableChar) {
+                    const emptyIndex = selectedSlots.findIndex(slot => slot === null);
+                    if (emptyIndex !== -1) {
+                        selectedSlots[emptyIndex] = availableChar;
+                        renderSlots();
+                        renderAvailableChars(currentShuffledState);
+                        checkWin();
+                    }
+                }
+            }
+        });
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timeLeft = 100;
+            const timerBar = $('timer-bar');
+            timerBar.style.width = '100%';
+            timerBar.className = 'h-full bg-green-500 w-full transition-all duration-[50ms] linear';
+
+            const decreaseAmount = 100 / (TIME_LIMIT_MS / TICK_RATE);
+
+            timerInterval = setInterval(() => {
+                timeLeft -= decreaseAmount;
+                timerBar.style.width = `${Math.max(0, timeLeft)}%`;
+                
+                if (timeLeft < 30) {
+                    timerBar.classList.replace('bg-green-500', 'bg-red-500');
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    handleTimeOut();
+                }
+            }, TICK_RATE);
+        }
+
+        function checkWin() {
+            const isFull = !selectedSlots.some(slot => slot === null);
+            if (!isFull) return;
+
+            const formedWord = selectedSlots.map(s => s.char).join('');
+            const q = shuffledQuestions[currentQuestionIndex];
+
+            // 鎖定點擊，確保玩家能看清楚最後一個字填入框內
+            isAnimating = true;
+
+            if (formedWord === q.word) {
+                clearInterval(timerInterval);
+                
+                // 答對時：格子變綠色，停頓 500ms 讓玩家欣賞完整的詞，才彈出成功視窗
+                const slots = $('ui-slots');
+                Array.from(slots.children).forEach(el => {
+                    el.classList.remove('pop-btn-pink');
+                    el.classList.add('bg-green-500', 'text-white', 'border-green-800');
+                });
+
+                setTimeout(() => {
+                    isAnimating = false;
+                    showFeedback(true);
+                }, 500);
+            } else {
+                // 答錯時的處理
+                const slots = $('ui-slots');
+                slots.classList.add('shake');
+                
+                // 將格子變紅以提示錯誤
+                Array.from(slots.children).forEach(el => {
+                    el.classList.remove('pop-btn-pink');
+                    el.classList.add('bg-red-500', 'text-white', 'border-red-900');
+                });
+
+                // 延長顯示時間至 800ms，讓玩家有時間看清楚最後一個字
+                setTimeout(() => {
+                    slots.classList.remove('shake');
+                    // 重置格子
+                    selectedSlots = new Array(currentWordChars.length).fill(null);
+                    renderSlots();
+                    renderAvailableChars(currentShuffledState);
+                    isAnimating = false; // 解除鎖定
+                }, 800); 
+            }
+        }
+
+        function handleTimeOut() {
+            showFeedback(false);
+        }
+
+        function showFeedback(isCorrect) {
+            const q = shuffledQuestions[currentQuestionIndex];
+            speakCantonese(q.ttsWord || q.word); // Auto speak on show
+
+            let timeBonus = 0;
+            if (isCorrect) {
+                timeBonus = Math.floor((timeLeft / 100) * 50);
+                score += (BASE_SCORE + timeBonus);
+                $('ui-score').innerText = score;
+                $('feedback-title').innerText = "好嘢！";
+                $('feedback-title').className = "text-4xl font-black mb-4 uppercase text-green-600";
+            } else {
+                $('feedback-title').innerText = "太慢啦！";
+                $('feedback-title').className = "text-4xl font-black mb-4 uppercase text-red-600";
+            }
+
+            $('feedback-word').innerText = q.word;
+            $('feedback-tip').innerText = q.tip;
+            $('feedback-bonus').innerText = `+${timeBonus}`;
+
+            showScreen('modal-feedback');
+        }
+
+        window.nextQuestion = function() {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < shuffledQuestions.length) {
+                showScreen('screen-game');
+                loadQuestion();
+            } else {
+                endGame();
+            }
+        }
+
+        function endGame() {
+            $('ui-final-score').innerText = score;
+            
+            $('save-status').classList.add('hidden');
+            $('btn-save-score').disabled = false;
+            $('player-name').value = '';
+            
+            if(score > 0) {
+                $('save-score-section').classList.remove('hidden');
+            } else {
+                $('save-score-section').classList.add('hidden');
+            }
+
+            showScreen('screen-end');
+        }
+
+        window.saveScore = async function() {
+            const btn = $('btn-save-score');
+            
+            // Check auth gracefully without annoying alert popups
+            if (!window.auth || !window.auth.currentUser) {
+                btn.innerText = "伺服器連線中...";
+                setTimeout(() => { btn.innerText = "提交"; }, 2000);
+                return;
+            }
+
+            const playerName = $('player-name').value.trim() || '神秘玩家';
+            
+            btn.disabled = true;
+            btn.innerText = "上傳中...";
+
+            try {
+                const colRef = collection(window.db, 'artifacts', window.appId, 'public', 'data', 'scramble_leaderboard');
+                await addDoc(colRef, {
+                    name: playerName.substring(0, 10),
+                    score: score,
+                    timestamp: Date.now()
+                });
+                
+                $('save-status').classList.remove('hidden');
+                btn.innerText = "已提交";
+                setTimeout(showLeaderboard, 1000);
+            } catch (error) {
+                console.error("Save error: ", error);
+                btn.innerText = "失敗，重試";
+                btn.disabled = false;
+            }
+        }
+
+        window.showLeaderboard = async function() {
+            showScreen('screen-leaderboard');
+            const listDiv = $('leaderboard-list');
+            listDiv.innerHTML = '<div class="text-center font-black text-gray-400 mt-10 animate-pulse">翻查龍虎榜中...</div>';
+
+            if (!window.auth || !window.auth.currentUser) {
+                listDiv.innerHTML = '<div class="text-center text-red-500 font-black mt-10">無法連線</div>';
+                return;
+            }
+
+            try {
+                const colRef = collection(window.db, 'artifacts', window.appId, 'public', 'data', 'scramble_leaderboard');
+                const querySnapshot = await getDocs(colRef);
+                
+                let records = [];
+                querySnapshot.forEach((doc) => records.push(doc.data()));
+
+                records.sort((a, b) => b.score - a.score);
+                records = records.slice(0, 50);
+
+                if (records.length === 0) {
+                    listDiv.innerHTML = '<div class="text-center font-black text-gray-400 mt-10">暫無記錄，快搶頭香！</div>';
+                    return;
+                }
+
+                let html = '';
+                records.forEach((record, index) => {
+                    let medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `<span class="text-gray-400">${index+1}</span>`;
+                    let bg = index % 2 === 0 ? 'bg-gray-100' : 'bg-white';
+
+                    html += `
+                        <div class="flex justify-between items-center p-3 rounded-xl ${bg} mb-2 border-2 border-black">
+                            <div class="flex items-center gap-3">
+                                <div class="text-xl w-[30px] text-center font-black">${medal}</div>
+                                <div class="font-black text-black">${escapeHtml(record.name)}</div>
+                            </div>
+                            <div class="text-pink-600 font-black text-xl">${record.score}</div>
+                        </div>
+                    `;
+                });
+                
+                listDiv.innerHTML = html;
+            } catch (error) {
+                console.error("Load error: ", error);
+                listDiv.innerHTML = '<div class="text-center text-red-500 font-black mt-10">載入失敗</div>';
+            }
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe || '').toString()
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
